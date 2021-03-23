@@ -2,6 +2,7 @@ package subtitle
 
 import (
 	"fmt"
+	"io/ioutil"
 	"strings"
 	"subtitleFinder/utils"
 
@@ -12,10 +13,9 @@ import (
 var movieDir string
 var movieSubtitleName string
 var movieFileName string
+var index string
 
-// var index string
-
-func GetSubtitles(moviePath string, movieUrl string, callback func(text string)) {
+func GetSubtitles(moviePath string, movieUrl string, log func(text string), addCheckButtons func(count int)) {
 
 	moviePathSplit := strings.Split(moviePath, "/")
 	movieFileName = moviePathSplit[len(moviePathSplit)-1]
@@ -26,10 +26,10 @@ func GetSubtitles(moviePath string, movieUrl string, callback func(text string))
 	movieUrlSplit := strings.Split(movieUrl, "/")
 	movieSubtitleName = movieUrlSplit[len(movieUrlSplit)-1]
 
-	callback("start process")
+	log("start process")
 	createDirs()
-	callback("subtitle directories created!")
-	getSubUrls(callback)
+	log("subtitle directories created!")
+	getSubUrls(log, addCheckButtons)
 }
 
 func createDirs() {
@@ -37,28 +37,29 @@ func createDirs() {
 	utils.CreateDir(movieDir + "/subtitles")
 }
 
-func getSubUrls(callback func(text string)) {
+func getSubUrls(log func(text string), addCheckButtons func(count int)) {
 	var urls []string
 	url := "https://subscene.com/subtitles/" + movieSubtitleName
 	counter := 0
 	c := colly.NewCollector()
 	c.OnHTML("table", func(e *colly.HTMLElement) {
-		callback("subtitle files scrapped!")
+		log("subtitle files scrapped!")
 		e.ForEach("a", func(_ int, elem *colly.HTMLElement) {
 			href := elem.Attr("href")
 			isExist, _ := utils.InArray(href, urls)
 			if strings.Contains(href, "farsi") && !isExist {
 				urls = append(urls, href)
-				getFile("https://subscene.com"+href, counter, callback)
+				getFile("https://subscene.com"+href, counter, log)
 				counter++
 			}
 		})
-		callback("end of process!")
+		log("end of process!")
+		addCheckButtons(counter)
 	})
 	_ = c.Visit(url)
 }
 
-func getFile(url string, counter int, callback func(text string)) {
+func getFile(url string, counter int, log func(text string)) {
 	subsDir := movieDir + "/subs/"
 	subtitlesDir := movieDir + "/subtitles/"
 	c := colly.NewCollector()
@@ -70,10 +71,41 @@ func getFile(url string, counter int, callback func(text string)) {
 		utils.CreateDir(fld2)
 		dest := fld + "/sub.zip"
 		fmt.Println("@@@" + dest)
-		callback(dest)
+		log(dest)
 		g := got.New()
 		_ = g.Download(href, dest)
 		utils.Unzip(dest, fld2)
 	})
 	_ = c.Visit(url)
+}
+
+func findSrtFile() string {
+	var srtFile string
+	subtleDir := movieDir + "/subtitles/" + index
+	files := utils.GetDirFiles(subtleDir)
+	for _, file := range files {
+		if strings.Contains(file, "srt") {
+			srtFile = file
+		}
+	}
+	return srtFile
+}
+
+func moveSrtFile(srtFile string) {
+	destFile := movieDir + "/" + movieFileName + ".fa.srt"
+	srtBytes, _ := ioutil.ReadFile(srtFile)
+	_, srtEncoding, _ := utils.DetectEncoding(srtBytes)
+	fmt.Println(srtEncoding)
+	if !strings.Contains(srtEncoding, "utf") {
+		utils.EncodeToUTF8(srtFile, destFile)
+	} else {
+		utils.MoveFile(srtFile, destFile)
+	}
+}
+
+func CheckSub(selectedIndex string, log func(text string)) {
+	index = selectedIndex
+	srtFile := findSrtFile()
+	moveSrtFile(srtFile)
+	log("Subtitle " + index + " was checked!")
 }
