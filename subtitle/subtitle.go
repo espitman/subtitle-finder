@@ -3,6 +3,9 @@ package subtitle
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"subtitleFinder/utils"
 
@@ -10,26 +13,35 @@ import (
 	"github.com/melbahja/got"
 )
 
+type LogFunc func(text string)
+
 var movieDir string
 var movieSubtitleName string
 var movieFileName string
 var index string
 
-func GetSubtitles(moviePath string, movieUrl string, log func(text string), addCheckButtons func(count int)) {
-
+func GetSubtitles(
+	moviePath string,
+	movieUrl string,
+	log LogFunc,
+	addCheckButtons func(count int),
+	addMoveAll func(),
+) {
 	moviePathSplit := strings.Split(moviePath, "/")
 	movieFileName = moviePathSplit[len(moviePathSplit)-1]
-	movieDir = strings.Replace(moviePath, movieFileName, "", 1)
+	movieDir = strings.Replace(moviePath, "/"+movieFileName, "", 1)
+	// movieDir = strings.Replace(moviePath, movieFileName, "", 1)
+	fmt.Println("movieFileName:", movieFileName)
+	fmt.Println("movieDir:", movieDir)
 	movieFileName = strings.Replace(movieFileName, ".mp4", "", 1)
 	movieFileName = strings.Replace(movieFileName, ".mkv", "", 1)
-
 	movieUrlSplit := strings.Split(movieUrl, "/")
 	movieSubtitleName = movieUrlSplit[len(movieUrlSplit)-1]
 
 	log("start process")
 	createDirs()
 	log("subtitle directories created!")
-	getSubUrls(log, addCheckButtons)
+	getSubUrls(log, addCheckButtons, addMoveAll)
 }
 
 func createDirs() {
@@ -37,7 +49,7 @@ func createDirs() {
 	utils.CreateDir(movieDir + "/subtitles")
 }
 
-func getSubUrls(log func(text string), addCheckButtons func(count int)) {
+func getSubUrls(log LogFunc, addCheckButtons func(count int), addMoveAll func()) {
 	var urls []string
 	url := "https://subscene.com/subtitles/" + movieSubtitleName
 	counter := 0
@@ -55,11 +67,12 @@ func getSubUrls(log func(text string), addCheckButtons func(count int)) {
 		})
 		log("end of process!")
 		addCheckButtons(counter)
+		addMoveAll()
 	})
 	_ = c.Visit(url)
 }
 
-func getFile(url string, counter int, log func(text string)) {
+func getFile(url string, counter int, log LogFunc) {
 	subsDir := movieDir + "/subs/"
 	subtitlesDir := movieDir + "/subtitles/"
 	c := colly.NewCollector()
@@ -103,9 +116,33 @@ func moveSrtFile(srtFile string) {
 	}
 }
 
-func CheckSub(selectedIndex string, log func(text string)) {
+func CheckSub(selectedIndex string, log LogFunc) {
 	index = selectedIndex
 	srtFile := findSrtFile()
 	moveSrtFile(srtFile)
 	log("Subtitle " + index + " was checked!")
+}
+
+func MoveAll(log LogFunc) {
+	subtitlesDir := movieDir + "/subtitles/"
+	srtFiles := []string{}
+	err := filepath.Walk(subtitlesDir,
+		func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			file := path
+			if strings.Contains(file, "srt") {
+				srtFiles = append(srtFiles, file)
+			}
+			return nil
+		})
+	if err != nil {
+		fmt.Println(err)
+	}
+	for i, file := range srtFiles {
+		destFile := movieDir + "/" + strconv.Itoa(i) + ".fa.srt"
+		fmt.Println(file, destFile)
+		utils.MoveFile(file, destFile)
+	}
 }

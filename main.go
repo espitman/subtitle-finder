@@ -41,7 +41,7 @@ func main() {
 	logContent = container.NewVBox()
 
 	content.Add(widget.NewButton("Get Subtitles", func() {
-		subtitle.GetSubtitles(movieFilePathEntry.Text, movieUrlEntry.Text, log, addCheckButtons)
+		subtitle.GetSubtitles(movieFilePathEntry.Text, movieUrlEntry.Text, log, addCheckButtons, addMoveAll)
 	}))
 	addPaddingTop(content)
 	addPaddingTop(logContent)
@@ -81,7 +81,6 @@ func addCheckButtons(count int) {
 		fmt.Println("Checks:" + selectedIndex)
 		subtitle.CheckSub(selectedIndex, log)
 		openMovie(movieFilePathEntry.Text)
-
 	})
 	content.Add(label)
 	grid := container.New(layout.NewGridLayout(2), combo, button)
@@ -92,4 +91,12 @@ func openMovie(path string) {
 	// url := "http://google.com"
 	cmd := exec.Command("open", path)
 	cmd.Start()
+}
+
+func addMoveAll() {
+	button := widget.NewButton("Move all Subtitles", func() {
+		subtitle.MoveAll(log)
+	})
+	grid := container.New(layout.NewGridLayout(1), button)
+	content.Add(grid)
 }
